@@ -129,6 +129,12 @@ serial_putc (uint8_t byte)
   intr_set_level (old_level);
 }
 
+uint8_t
+serial_getc (void)
+{
+  return input_getc ();
+}
+
 /* Flushes anything in the serial buffer out the port in polling
    mode. */
 void
@@ -216,7 +222,14 @@ serial_interrupt (struct intr_frame *f UNUSED)
   /* As long as we have room to receive a byte, and the hardware
      has a byte for us, receive a byte.  */
   while (!input_full () && (inb (LSR_REG) & LSR_DR) != 0)
-    input_putc (inb (RBR_REG));
+    {
+      uint8_t data = inb (RBR_REG);
+      input_putc (data);
+      /* echo */
+      while (!(inb (LSR_REG) & LSR_THRE))
+	    ;
+      outb(THR_REG, data);
+    }
 
   /* As long as we have a byte to transmit, and the hardware is
      ready to accept a byte for transmission, transmit a byte. */

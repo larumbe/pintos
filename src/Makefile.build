@@ -78,7 +78,8 @@ DEPENDS = $(patsubst %.o,%.d,$(OBJECTS))
 
 GDBPORT := $(shell expr `id -u` % 5000 + 25000)
 IMAGE = kernel.img
-QEMUOPTS = -serial mon:stdio -gdb tcp::$(GDBPORT)
+QEMUDBG = -s -S
+QEMUOPTS = -serial mon:stdio
 QEMUOPTS += $(shell if $(QEMU) -nographic -help | grep -q '^-D '; then echo '-D qemu.log'; fi)
 
 %.o: %.c
@@ -93,19 +94,19 @@ threads/kernel.lds.s: threads/kernel.lds.S threads/loader.h
 kernel.o: threads/kernel.lds.s $(OBJECTS) 
 	$(LD) $(LDOPTIONS) -T $< -o $@ $(OBJECTS)
 	$(OBJDUMP) -S $@ > kernel.asm
-	$(NM) -n $@ > kernel.sym
+	$(OBJCOPY) --only-keep-debug $@ kernel.sym
 
 kernel.bin: kernel.o
-	$(OBJCOPY) -R .note -R .comment -S $< $@
+	$(OBJCOPY) -R .note -R .comment $< $@
 
 threads/loader.o: threads/loader.S
 	$(CC) -c $< -o $@ $(ASFLAGS) $(CPPFLAGS) $(DEFINES)
 
 loader.bin: threads/loader.o
 	$(LD) $(LDOPTIONS) -N -e 0 -Ttext 0x7c00 -o loader.out $<
+	$(OBJCOPY) --only-keep-debug loader.out loader.sym
 	$(OBJDUMP) -S loader.out > loader.asm
-	$(OBJCOPY) -S -O binary -j .text loader.out $@
-	rm loader.out
+	$(OBJCOPY) -O binary -j .text loader.out $@
 
 os.dsk: kernel.bin
 	cat $^ > $@
@@ -122,7 +123,7 @@ qemu-nox: $(IMAGE)
 	@echo "*** Use Ctrl-a x to exit qemu. If you are under GNU Screen or Tmux and "
 	@echo "*** its prefix key is Ctrl-a, press Ctrl-a twice and x to exit."
 	@echo "***"
-	$(QEMU) -nographic -drive file=$(IMAGE),index=0,media=disk,format=raw $(QEMUOPTS)
+	$(QEMU) $(QEMUDBG) -nographic -drive file=$(IMAGE),index=0,media=disk,format=raw $(QEMUOPTS)
 
 clean::
 	rm -f $(OBJECTS) $(DEPENDS) 

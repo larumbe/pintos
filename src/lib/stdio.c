@@ -5,6 +5,8 @@
 #include <stdint.h>
 #include <string.h>
 
+#include "devices/serial.h"
+
 /* Auxiliary data for vsnprintf_helper(). */
 struct vsnprintf_aux 
   {
@@ -652,4 +654,28 @@ print_human_readable_size (uint64_t size)
         size /= 1024;
       printf ("%"PRIu64" %s", size, *fp);
     }
+}
+
+unsigned int
+readline (char * line)
+{
+  unsigned int cnt = 0;
+  uint8_t c;
+
+  while (cnt < (MAX_LINE - 1))
+    {
+      c = serial_getc ();
+      if (c == '\r')
+	{
+	  /* Now follows a \n */
+	  serial_getc();
+	  break;
+	}
+
+      line[cnt++] = c;      
+    }
+
+  line[cnt] = '\0';
+
+  return cnt;
 }

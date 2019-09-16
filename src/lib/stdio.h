@@ -15,6 +15,9 @@
 #define STDIN_FILENO 0
 #define STDOUT_FILENO 1
 
+/* max line size */
+#define MAX_LINE 64
+
 /* Standard functions. */
 int printf (const char *, ...) PRINTF_FORMAT (1, 2);
 int snprintf (char *, size_t, const char *, ...) PRINTF_FORMAT (3, 4);
@@ -22,6 +25,7 @@ int vprintf (const char *, va_list) PRINTF_FORMAT (1, 0);
 int vsnprintf (char *, size_t, const char *, va_list) PRINTF_FORMAT (3, 0);
 int putchar (int);
 int puts (const char *);
+unsigned int readline (char * line);
 
 /* Nonstandard functions. */
 void hex_dump (uintptr_t ofs, const void *, size_t size, bool ascii);

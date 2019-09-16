@@ -64,6 +64,7 @@ static char **read_command_line (void);
 static char **parse_options (char **argv);
 static void run_actions (char **argv);
 static void usage (void);
+static void minimonitor (void);
 
 #ifdef FILESYS
 static void locate_block_devices (void);
@@ -133,7 +134,7 @@ pintos_init (void)
     /* Run actions specified on kernel command line. */
     run_actions (argv);
   } else {
-    // TODO: no command line passed to kernel. Run interactively 
+    minimonitor ();
   }
 
   /* Finish up. */
@@ -431,3 +432,25 @@ locate_block_device (enum block_type role, const char *name)
     }
 }
 #endif
+
+static void
+minimonitor (void)
+{
+  char line[MAX_LINE];
+  
+  while (1)
+    {
+      printf ("CS318> ");
+      readline (line);
+
+      if (!strcmp (line, "whoami"))
+	{
+	  printf ("\nYou are Manuel Fifote\n");
+	  continue;
+	}
+      else if (!strcmp (line, "exit"))
+	break;
+      else
+	printf("\n");
+    }
+}
