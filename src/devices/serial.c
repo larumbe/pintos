@@ -224,10 +224,12 @@ serial_interrupt (struct intr_frame *f UNUSED)
   while (!input_full () && (inb (LSR_REG) & LSR_DR) != 0)
     {
       uint8_t data = inb (RBR_REG);
+      data = (data == '\r' ? '\n' : data);
       input_putc (data);
-      /* echo */
+
+      /* terminal echo */
       while (!(inb (LSR_REG) & LSR_THRE))
-	    ;
+	;
       outb(THR_REG, data);
     }
 

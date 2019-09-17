@@ -665,13 +665,8 @@ readline (char * line)
   while (cnt < (MAX_LINE - 1))
     {
       c = serial_getc ();
-      if (c == '\r')
-	{
-	  /* Now follows a \n */
-	  serial_getc();
-	  break;
-	}
-
+      if (c == '\n')
+	break;
       line[cnt++] = c;      
     }
 

@@ -445,12 +445,12 @@ minimonitor (void)
 
       if (!strcmp (line, "whoami"))
 	{
-	  printf ("\nYou are Manuel Fifote\n");
+	  printf ("You are Manuel Fifote\n");
 	  continue;
 	}
       else if (!strcmp (line, "exit"))
 	break;
       else
-	printf("\n");
+	printf("Unknown command!\n");
     }
 }
