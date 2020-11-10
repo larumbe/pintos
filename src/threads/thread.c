@@ -11,6 +11,8 @@
 #include "threads/switch.h"
 #include "threads/synch.h"
 #include "threads/vaddr.h"
+#include "tests/threads/tests.h"
+
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
@@ -23,6 +25,10 @@
 /* List of processes in THREAD_READY state, that is, processes
    that are ready to run but not actually running. */
 static struct list ready_list;
+
+/* List of processes in the THREAD_BLOCKED state waiting
+  for events to happen, like timer expiration */
+static struct list waiting_list;
 
 /* List of all processes.  Processes are added to this list
    when they are first scheduled and removed when they exit. */
@@ -92,6 +98,7 @@ thread_init (void)
   lock_init (&tid_lock);
   list_init (&ready_list);
   list_init (&all_list);
+  list_init (&waiting_list);
 
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
@@ -123,6 +130,8 @@ void
 thread_tick (void) 
 {
   struct thread *t = thread_current ();
+  struct thread *sleeper;
+  struct list_elem *e;
 
   /* Update statistics. */
   if (t == idle_thread)
@@ -133,6 +142,25 @@ thread_tick (void)
 #endif
   else
     kernel_ticks++;
+
+  /* iterate over list of slept processes and decrease their ticks */
+  /* the problem seems to be iterating a list you're editing */
+  if (!list_empty(&waiting_list)) {
+    e = list_begin (&waiting_list);
+    while (e != list_end(&waiting_list)) {
+      sleeper = list_entry (e, struct thread, elem);
+      sleeper->ticks_wait--;
+        if (sleeper->ticks_wait == 0) {
+	  e = list_remove (e);
+	  list_push_back (&ready_list, &sleeper->elem);
+	  sleeper->status = THREAD_READY;
+	  msg ("thread finished waiting: %d\n", sleeper->tid);
+	  break;
+      }
+      else
+	e = list_next(e);
+    }
+  }
 
   /* Enforce preemption. */
   if (++thread_ticks >= TIME_SLICE)
@@ -202,6 +230,21 @@ thread_create (const char *name, int priority,
   thread_unblock (t);
 
   return tid;
+}
+
+void thread_wait (int64_t ticks)
+{
+  struct thread *cur = thread_current ();
+
+  ASSERT (!intr_context ());
+  ASSERT (intr_get_level () == INTR_OFF);
+
+  cur->status = THREAD_BLOCKED;
+  cur->ticks_wait = ticks;
+
+  list_remove(&cur->elem);
+  list_push_back (&waiting_list, &cur->elem);
+  schedule ();
 }
 
 /* Puts the current thread to sleep.  It will not be scheduled
