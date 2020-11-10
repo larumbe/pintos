@@ -144,18 +144,17 @@ thread_tick (void)
     kernel_ticks++;
 
   /* iterate over list of slept processes and decrease their ticks */
-  /* the problem seems to be iterating a list you're editing */
   if (!list_empty(&waiting_list)) {
     e = list_begin (&waiting_list);
     while (e != list_end(&waiting_list)) {
       sleeper = list_entry (e, struct thread, elem);
       sleeper->ticks_wait--;
-        if (sleeper->ticks_wait == 0) {
-	  e = list_remove (e);
-	  list_push_back (&ready_list, &sleeper->elem);
-	  sleeper->status = THREAD_READY;
-	  msg ("thread finished waiting: %d\n", sleeper->tid);
-	  break;
+      if (sleeper->ticks_wait == 0) {
+	/* 'e' is now the next element to the deleted one */
+	e = list_remove (e);
+	list_push_back (&ready_list, &sleeper->elem);
+	sleeper->status = THREAD_READY;
+	break;
       }
       else
 	e = list_next(e);
