@@ -55,6 +55,7 @@ struct kernel_thread_frame
 static long long idle_ticks;    /* # of timer ticks spent idle. */
 static long long kernel_ticks;  /* # of timer ticks in kernel threads. */
 static long long user_ticks;    /* # of timer ticks in user programs. */
+static long long total_ticks;	/* for processa aging */
 
 /* Scheduling. */
 #define TIME_SLICE 4            /* # of timer ticks to give each thread. */
@@ -121,7 +122,9 @@ thread_start (void)
   intr_enable ();
 
   /* Wait for the idle thread to initialize idle_thread. */
+  printf("Waiting for semaphore\n");
   sema_down (&idle_started);
+  printf("Done waiting for semaphore\n");
 }
 
 /* Called by the timer interrupt handler at each timer tick.
@@ -129,12 +132,12 @@ thread_start (void)
 void
 thread_tick (void) 
 {
-  struct thread *t = thread_current ();
-  struct thread *sleeper;
+  struct thread *cur = thread_current ();
+  struct thread *sleeper, *t;
   struct list_elem *e;
 
   /* Update statistics. */
-  if (t == idle_thread)
+  if (cur == idle_thread)
     idle_ticks++;
 #ifdef USERPROG
   else if (t->pagedir != NULL)
@@ -143,7 +146,21 @@ thread_tick (void)
   else
     kernel_ticks++;
 
-  /* iterate over list of slept processes and decrease their ticks */
+  /* priority aging */
+  total_ticks++;
+  if ((total_ticks % (TIME_SLICE * 4)) == 0) {
+    for (e = list_begin (&ready_list);
+	 e != list_end (&ready_list);
+	 e = list_next (e)) {
+      t = list_entry (e, struct thread, elem);
+      if (t->priority < PRI_MAX)
+	t->priority++;
+    }
+  }
+
+  /* printf("Inside timer interrupt, thread kicks %d\n", thread_ticks); */
+   
+   /* iterate over list of sleeping processes and decrease their ticks */
   if (!list_empty(&waiting_list)) {
     e = list_begin (&waiting_list);
     while (e != list_end(&waiting_list)) {
@@ -153,6 +170,7 @@ thread_tick (void)
 	/* 'e' is now the next element to the deleted one */
 	e = list_remove (e);
 	list_push_back (&ready_list, &sleeper->elem);
+	/* check that priority is higher, then yield on return */
 	sleeper->status = THREAD_READY;
 	break;
       }
@@ -163,7 +181,13 @@ thread_tick (void)
 
   /* Enforce preemption. */
   if (++thread_ticks >= TIME_SLICE)
-    intr_yield_on_return ();
+    {
+      /* printf("Timer has expired, about next time yield\n"); */
+      intr_yield_on_return ();
+    }
+
+  /* printf("Thread kicks %d\n", thread_ticks); */
+
 }
 
 /* Prints thread statistics. */
@@ -241,7 +265,7 @@ void thread_wait (int64_t ticks)
   cur->status = THREAD_BLOCKED;
   cur->ticks_wait = ticks;
 
-  list_remove(&cur->elem);
+  /* list_remove (&cur->elem); */
   list_push_back (&waiting_list, &cur->elem);
   schedule ();
 }
@@ -274,13 +298,23 @@ void
 thread_unblock (struct thread *t) 
 {
   enum intr_level old_level;
+  struct thread *cur;
 
   ASSERT (is_thread (t));
+  ASSERT (t->status == THREAD_BLOCKED);
 
   old_level = intr_disable ();
-  ASSERT (t->status == THREAD_BLOCKED);
+  cur = thread_current();
+
   list_push_back (&ready_list, &t->elem);
   t->status = THREAD_READY;
+    
+  if (t->priority > cur->priority) {
+    cur->status = THREAD_READY;
+    list_push_back (&ready_list, &cur->elem);
+    schedule ();
+  }
+
   intr_set_level (old_level);
 }
 
@@ -373,11 +407,39 @@ thread_foreach (thread_action_func *func, void *aux)
     }
 }
 
+bool priority_less (const struct list_elem *a,
+		    const struct list_elem *b,
+		    void *aux)
+{
+  (void) aux;
+	
+  struct thread *l1 = list_entry (a, struct thread, elem);
+  struct thread *l2 = list_entry (b, struct thread, elem);
+
+  return (l1->priority < l2->priority);
+}
+
 /* Sets the current thread's priority to NEW_PRIORITY. */
 void
 thread_set_priority (int new_priority) 
 {
-  thread_current ()->priority = new_priority;
+  struct thread *cur = thread_current ();
+  struct thread *t;
+
+  cur->priority_orig = new_priority;
+  
+  /* check we aren't being donated priority through a lock */
+  if (cur->num_lock_donors &&
+      new_priority <= cur->priority)
+    return;
+  
+  cur->priority = new_priority;
+
+  /* yield if no longer max priority in the ready list */
+  t = list_entry (list_max (&ready_list, priority_less, NULL),
+		  struct thread, elem);
+  if (cur->priority < t->priority)
+    thread_yield ();
 }
 
 /* Returns the current thread's priority. */
@@ -452,6 +514,8 @@ idle (void *idle_started_ UNUSED)
 
          See [IA32-v2a] "HLT", [IA32-v2b] "STI", and [IA32-v3a]
          7.11.1 "HLT Instruction". */
+        /* printf ("Idle started.\n"); */
+
       asm volatile ("sti; hlt" : : : "memory");
     }
 }
@@ -504,9 +568,15 @@ init_thread (struct thread *t, const char *name, int priority)
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
+  t->priority_orig = priority;
   t->magic = THREAD_MAGIC;
+  t->elem.next = t->elem.prev = NULL;
 
+  t->num_lock_donors = 0;
+  list_init (&t->donlocklist);
+    
   old_level = intr_disable ();
+  /* insert them in order of priority */
   list_push_back (&all_list, &t->allelem);
   intr_set_level (old_level);
 }
@@ -532,10 +602,15 @@ alloc_frame (struct thread *t, size_t size)
 static struct thread *
 next_thread_to_run (void) 
 {
+  /* find a way to always keep the threads sorted by priority,
+     with a binary tree */
   if (list_empty (&ready_list))
     return idle_thread;
-  else
-    return list_entry (list_pop_front (&ready_list), struct thread, elem);
+  else {
+    struct list_elem *max = list_max (&ready_list, priority_less, NULL);
+    list_remove (max);
+    return list_entry (max, struct thread, elem);
+  }
 }
 
 /* Completes a thread switch by activating the new thread's page
@@ -572,6 +647,10 @@ thread_schedule_tail (struct thread *prev)
   process_activate ();
 #endif
 
+  /* restore original priority */
+  if (!cur->num_lock_donors)
+    cur->priority = cur->priority_orig;
+  
   /* If the thread we switched from is dying, destroy its struct
      thread.  This must happen late so that thread_exit() doesn't
      pull out the rug under itself.  (We don't free
