@@ -574,6 +574,7 @@ init_thread (struct thread *t, const char *name, int priority)
 
   t->num_lock_donors = 0;
   list_init (&t->donlocklist);
+  t->waitlock = NULL;
     
   old_level = intr_disable ();
   /* insert them in order of priority */

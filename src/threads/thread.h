@@ -100,8 +100,10 @@ struct thread
     /* priority and locking */
     int priority;                       /* Priority. */
     int priority_orig;			/* Original priority */
+
     uint32_t num_lock_donors;		/* Number of locks with ongoing priority donation */
     struct list donlocklist;		/* list of priority-donating locks */
+    struct lock *waitlock;		/* lock a thread is waiting for */
 
     /* timer counter for sleping */
     int64_t ticks_wait;

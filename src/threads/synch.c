@@ -55,14 +55,21 @@ static void
 donate_priority(struct semaphore *sema, int priority)
 {
     struct lock *l = container_of(sema, struct lock, semaphore);
-     if (l->holder->priority < priority) {
+    struct thread *holder = l->holder;
+
+     if (holder->priority < priority) {
       if (!(l->priority_donated)) {
- 	l->priority_donated = true;
-	list_push_back(&l->holder->donlocklist, &l->lockelem);
-	l->holder->num_lock_donors++;
+	l->priority_donated = true;
+	list_push_back(&holder->donlocklist, &l->lockelem);
+	holder->num_lock_donors++;
       }
       l->donation = priority;
-      l->holder->priority = priority;
+      holder->priority = priority;
+
+      if (holder->status == THREAD_BLOCKED
+	  && holder->waitlock) {
+	donate_priority(&holder->waitlock->semaphore, priority);
+      }
      } else {
        if (l->donation < priority)
 	 l->donation = priority;
@@ -79,8 +86,9 @@ donate_priority(struct semaphore *sema, int priority)
 void
 sema_down (struct semaphore *sema) 
 {
-  struct thread *cur;
+  struct thread *cur = thread_current ();
   enum intr_level old_level;
+  struct lock *l;
 
   ASSERT (sema != NULL);
   ASSERT (!intr_context ());
@@ -90,13 +98,17 @@ sema_down (struct semaphore *sema)
   old_level = intr_disable ();
   while (sema->value == 0) 
     {
-      cur = thread_current ();
       list_push_back (&sema->waiters, &cur->elem);
       if (sema->is_locking) {
+	l = container_of(sema, struct lock, semaphore);
+	cur->waitlock = l;
 	donate_priority(sema, cur->priority);
       }
       thread_block ();
     }
+
+  if (sema->is_locking)
+    cur->waitlock = NULL;
   sema->value--;
   intr_set_level (old_level);
 }
