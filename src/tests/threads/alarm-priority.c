@@ -21,9 +21,6 @@ test_alarm_priority (void)
   /* This test does not work with the MLFQS. */
   ASSERT (!thread_mlfqs);
 
-  /* test semaphores first */
-  sema_self_test();
-
   wake_time = timer_ticks () + 5 * TIMER_FREQ;
   sema_init (&wait_sema, 0);
   

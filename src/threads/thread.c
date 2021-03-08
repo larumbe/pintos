@@ -265,7 +265,6 @@ void thread_wait (int64_t ticks)
   cur->status = THREAD_BLOCKED;
   cur->ticks_wait = ticks;
 
-  /* list_remove (&cur->elem); */
   list_push_back (&waiting_list, &cur->elem);
   schedule ();
 }
