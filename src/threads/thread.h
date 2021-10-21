@@ -11,7 +11,8 @@ enum thread_status
     THREAD_RUNNING,     /* Running thread. */
     THREAD_READY,       /* Not running but ready to run. */
     THREAD_BLOCKED,     /* Waiting for an event to trigger. */
-    THREAD_DYING        /* About to be destroyed. */
+    THREAD_DYING,        /* About to be destroyed. */
+    THREAD_NASCENT      /* only when still creating it*/
   };
 
 /* Thread identifier type.
@@ -23,6 +24,7 @@ typedef int tid_t;
 #define PRI_MIN 0                       /* Lowest priority. */
 #define PRI_DEFAULT 31                  /* Default priority. */
 #define PRI_MAX 63                      /* Highest priority. */
+#define NQ (PRI_MAX - PRI_MIN + 1)      /* priority queue number */
 
 /* A kernel thread or user process.
 
@@ -84,6 +86,7 @@ struct thread
   {
     /* Owned by thread.c. */
     tid_t tid;                          /* Thread identifier. */
+    struct thread *parent;              /* parent thread */
     enum thread_status status;          /* Thread state. */
     char name[16];                      /* Name (for debugging purposes). */
     uint8_t *stack;                     /* Saved stack pointer. */
@@ -101,6 +104,9 @@ struct thread
     int priority;                       /* Priority. */
     int priority_orig;			/* Original priority */
 
+    int nice;
+    int recent_cpu;
+
     uint32_t num_lock_donors;		/* Number of locks with ongoing priority donation */
     struct list donlocklist;		/* list of priority-donating locks */
     struct lock *waitlock;		/* lock a thread is waiting for */
@@ -116,10 +122,12 @@ struct thread
    Controlled by kernel command-line option "-o mlfqs". */
 extern bool thread_mlfqs;
 
+extern int load_avg;
+
 void thread_init (void);
 void thread_start (void);
 
-void thread_tick (void);
+void thread_tick (int64_t ticks);
 void thread_print_stats (void);
 
 typedef void thread_func (void *aux);

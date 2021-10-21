@@ -102,7 +102,8 @@ sema_down (struct semaphore *sema)
       if (sema->is_locking) {
 	l = container_of(sema, struct lock, semaphore);
 	cur->waitlock = l;
-	donate_priority(sema, cur->priority);
+        if (!thread_mlfqs)
+          donate_priority(sema, cur->priority);
       }
       thread_block ();
     }

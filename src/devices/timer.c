@@ -96,10 +96,9 @@ timer_sleep (int64_t ticks)
 	  return;
 
   ASSERT(intr_get_level() == INTR_ON);
+
   old_level = intr_disable ();
-
   thread_wait(ticks);
-
   intr_set_level (old_level);
 }
 
@@ -178,7 +177,7 @@ static void
 timer_interrupt (struct intr_frame *args UNUSED)
 {
   ticks++;
-  thread_tick ();
+  thread_tick (ticks);
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer

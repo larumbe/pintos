@@ -178,4 +178,9 @@ void list_unique (struct list *, struct list *duplicates,
 struct list_elem *list_max (struct list *, list_less_func *, void *aux);
 struct list_elem *list_min (struct list *, list_less_func *, void *aux);
 
+#define list_foreach(elem, entry, head, member)                  \
+  for (elem = list_begin (&head), entry = list_entry (elem, typeof(*entry), member); \
+       elem != list_end (&head);                                        \
+       elem = list_next (elem), entry = list_entry (elem, typeof(*entry), member))
+
 #endif /* lib/kernel/list.h */
